@@ -30,6 +30,9 @@ class PPOConfig(struct.PyTreeNode):
     gradient_update_steps: int
     end_pi_lr: float = 0
     end_val_lr: float = 0
+    use_aa: bool = False
+    aa_gamma: float = 0.99
+    aa_beta: float = 1
     @classmethod
     def init(cls, args: Namespace):
         if args.algo == 'ippo':
@@ -41,7 +44,10 @@ class PPOConfig(struct.PyTreeNode):
                 ratio_clip=args.ratio_clip,
                 value_clip=args.value_clip,
                 grad_clip_norm=args.grad_clip_norm,
-                gradient_update_steps=gradient_update_steps
+                gradient_update_steps=gradient_update_steps,
+                use_aa=args.use_aa,
+                aa_gamma=args.aa_gamma,
+                aa_beta=args.aa_beta,
             )
         else:
             raise NotImplementedError(f"algorithm {args.algo} does not have a config initialization funciton")
@@ -225,36 +231,61 @@ class PPOAgent(struct.PyTreeNode):
         next_critic_rnn_state, val = self.critic_fn.apply(critic_train_state.params, critic_rnn_state, obs)
         return val.squeeze(0)
     
-    def actor_loss_fn(self, actor_params: flax.core.FrozenDict, buffer: Experience, advantage: jax.Array):
-        """Notation:
-            L: chunk_length | epsiode_length
-            B: batch_size
-            A: observation_space
-        Input:
-            buffer: [L, B, *shape]
-            adv: [L, B]
-        """
-        pi: Distribution
-        rnn_state, pi = self.actor_fn.apply(actor_params, buffer.agent_state.actor_rnn_state[0], buffer.obs) # [L, B, *A]
-        log_p = pi.log_prob(buffer.action[self.agent_name]) # [L, B]
+    def actor_loss_fn(
+        self,
+        actor_params: flax.core.FrozenDict,
+        buffer: Experience,
+        advantage: jax.Array,
+        other_advantages: Sequence[jax.Array]
+    ):
+        # Obtain the policy distribution (pi) from the actor network.
+        rnn_state, pi = self.actor_fn.apply(actor_params, buffer.agent_state.actor_rnn_state[0], buffer.obs)
+
+        # Stop gradients and cast the actions to float.
+        action = jax.lax.stop_gradient(buffer.action[self.agent_name]).astype(jnp.float32)
+        # Compute the log probability.
+        log_p = pi.log_prob(action)
         if len(log_p.shape) > 2:
             log_p = jnp.sum(log_p, axis=2)
-        ratio = jnp.exp(log_p - buffer.log_p) # [L, B]
+        
+        if self.config.use_aa:
+            def discounted_cumsum(x, gamma):
+                def body(c, a):
+                    new_c = c * gamma + a
+                    return new_c, new_c
+                init = jnp.zeros_like(x[0])
+                _, y = jax.lax.scan(body, init, x)
+                return y
 
-        unclipped_pi_obj = ratio * advantage # [L, B]
-        clipped_pi_obj = jnp.clip(ratio, 1 - self.config.ratio_clip, 1 + self.config.ratio_clip) * advantage # [L, B]
+            # Compute the cumulative sum over time.
+            cum_adv = discounted_cumsum(advantage, self.config.aa_gamma)
+            cum_adv = jnp.concatenate(
+                [jnp.zeros((1,) + advantage.shape[1:], dtype=advantage.dtype), cum_adv[:-1]], axis=0
+            )
+            
+            # Average the opponent advantages if multiple are provided.
+            opponent_adv = jnp.mean(jnp.stack(other_advantages), axis=0) if other_advantages else 0.0
 
-        pi_loss = -jnp.minimum(unclipped_pi_obj, clipped_pi_obj) # [L, B]
-        pi_loss = pi_loss.mean()
-        entropy = pi.entropy() # [L, B]
-        entropy = entropy.mean()
+            # This follows: A*_t = A^1_t + beta * gamma * (sum_{k<t} gamma^(t-k) A^1_k) * A^2_t
+            integrated_adv = advantage + self.config.aa_beta * self.config.aa_gamma * cum_adv * opponent_adv
+            advantage = integrated_adv
 
+        ratio = jnp.exp(log_p - buffer.log_p)
+        unclipped_pi_obj = ratio * advantage
+        clipped_pi_obj = jnp.clip(ratio, 1 - self.config.ratio_clip, 1 + self.config.ratio_clip) * advantage
+
+        pi_loss = -jnp.minimum(unclipped_pi_obj, clipped_pi_obj).mean()
+        entropy = pi.entropy().mean()
         loss = pi_loss - self.config.entropy_coef * entropy
+
+        # For logging, we include the mean of the other advantages.
+        other_adv_mean = jnp.mean(jnp.stack(other_advantages)) if other_advantages else 0.0
         return loss, {
             'pi_loss': pi_loss,
             'entropy': entropy,
             'log_p': log_p.mean(),
-            'ratio_clip_fraction': (jnp.abs(ratio - 1) > self.config.ratio_clip).mean()
+            'ratio_clip_fraction': (jnp.abs(ratio - 1) > self.config.ratio_clip).mean(),
+            'other_adv_mean': other_adv_mean
         }
 
     def critic_loss_fn(self, critic_params: flax.core.FrozenDict, buffer: Experience, target_val: jax.Array):
@@ -281,25 +312,21 @@ class PPOAgent(struct.PyTreeNode):
     def model_gradient_update(
         self,
         train_state: PPOTrainState,
-        data: tuple[Experience, jax.Array, jax.Array]
+        data: tuple[Experience, jax.Array, jax.Array, Sequence[jax.Array]]
     ) -> tuple[PPOTrainState, dict]:
-        buffer, advantage, target_val = data
+        buffer, advantage, target_val, other_advantages = data
         actor_train_state, critic_train_state = train_state
 
-        (actor_loss, actor_aux), actor_grads = jax.value_and_grad(self.actor_loss_fn, has_aux=True)(
-            actor_train_state.params,
-            buffer=buffer,
-            advantage=advantage
-        )
+        (actor_loss, actor_aux), actor_grads = jax.value_and_grad(
+            self.actor_loss_fn, has_aux=True
+        )(actor_train_state.params, buffer=buffer, advantage=advantage, other_advantages=other_advantages)
         actor_train_state = actor_train_state.apply_gradients(grads=actor_grads)
 
-        (critic_loss, critic_aux), critic_grads = jax.value_and_grad(self.critic_loss_fn, has_aux=True)(
-            critic_train_state.params,
-            buffer=buffer,
-            target_val=target_val
-        )
+        (critic_loss, critic_aux), critic_grads = jax.value_and_grad(
+            self.critic_loss_fn, has_aux=True
+        )(critic_train_state.params, buffer=buffer, target_val=target_val)
         critic_train_state = critic_train_state.apply_gradients(grads=critic_grads)
-        
+
         optim_log = {
             'actor_loss': actor_loss,
             'actor_grad_norm': global_norm(actor_grads),
@@ -316,9 +343,9 @@ class PPOAgent(struct.PyTreeNode):
         train_state: PPOTrainState,
         buffer: Experience,
         advantage: jax.Array,
-        target_val: jax.Array
+        target_val: jax.Array,
+        other_advantages: Sequence[jax.Array]
     ) -> tuple[PPOTrainState, dict]:
-        # Use the same rng to ensure the random permutated indicies are the same for buffer/advanrage/target_val
         rng, batch_split_rng = jax.random.split(rng)
         buffer_batch = split_into_minibatch(
             batch_split_rng,
@@ -341,7 +368,22 @@ class PPOAgent(struct.PyTreeNode):
             num_minibatches=self.num_minibatches,
             minibatch_num_chunks=self.minibatch_num_chunks
         )
-        train_state, optim_log = jax.lax.scan(self.model_gradient_update, train_state, (buffer_batch, advantage_batch, target_val_batch))
+        # For each other advantage, split into minibatches.
+        other_adv_batch = [
+            split_into_minibatch(
+                batch_split_rng,
+                adv,
+                chunk_length=self.chunk_length,
+                num_minibatches=self.num_minibatches,
+                minibatch_num_chunks=self.minibatch_num_chunks
+            )
+            for adv in other_advantages
+        ]
+        train_state, optim_log = jax.lax.scan(
+            self.model_gradient_update,
+            train_state,
+            (buffer_batch, advantage_batch, target_val_batch, other_adv_batch)
+        )
         optim_log = jax.tree_util.tree_map(jnp.mean, optim_log)
         return train_state, optim_log
     

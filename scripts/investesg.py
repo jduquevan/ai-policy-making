@@ -7,9 +7,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     print(args)
     config = generate_parameters(domain=args.env_config_name, debug=args.debug, wandb_project="InvestESG", config_from_arg=vars(args))
-
     print(config)
-
     from jax_pbt.env.investesg.investesg_env import InvestESGConst, InvestESGEnv
     env_fn = InvestESGEnv(config=config)
     from jax_pbt.model.models import MLPConfig
@@ -24,6 +22,8 @@ if __name__ == '__main__':
     controller = IPPOController([args], env_fn=env_fn, model_config_lst=[model_config])
     import jax
     import jax.numpy as jnp
+    if args.debug:
+        jax.config.update("jax_disable_jit", True)
     rng = jax.random.key(0)
     if args.eval_points > 0:
         eval_at_steps = list((np.arange(args.eval_points + 1) * args.total_env_steps / args.eval_points).astype(int))
@@ -39,7 +39,6 @@ if __name__ == '__main__':
     agent_roles_lst = [
         RoleIndex(jnp.array(x, dtype=int)[:, 0], jnp.array(x, dtype=int)[:, 1]) for x in agent_roles_lst
     ]
-    
     runner_state = controller.run(rng, agent_roles_lst, get_epoch_env_const=get_epoch_env_const, eval_at_steps=eval_at_steps)
     import flax.training.checkpoints as checkpoints
     rng, train_state_lst, agent_state_lst, env_state, all_obs = runner_state

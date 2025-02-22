@@ -201,28 +201,49 @@ class IPPOController(BaseController):
             'done': all_buffer.done
         }
         
-        # rng, train_state, agent_state, env_state, all_last_obs = runner_state
         rng, train_state_lst, agent_state_lst, env_state, all_last_obs = runner_state
 
-        new_train_state_lst = []
-        # TODO: parallel?
-        for i, (agent_name, agent_fn, train_state, agent_state, agent_roles) in enumerate(zip(self.env_fn.agent_lst,self.agent_fn_lst, train_state_lst, agent_state_lst, agent_roles_lst)):
-            # print('stop_training', i, self.[i])
+        # Compute individual advantages for all agents.
+        advantages_all = []
+        buffers_all = []
+        for i, (agent_name, agent_fn, train_state, agent_state, agent_roles) in enumerate(
+            zip(self.env_fn.agent_lst, self.agent_fn_lst, train_state_lst, agent_state_lst, agent_roles_lst)
+        ):
             if self.stop_training[i]:
+                advantages_all.append(None)
+                buffers_all.append(None)
                 continue
-            buffer = jax.vmap(select_env_agent, in_axes=(0, None))(all_buffer, agent_roles)
-
-            buffer = buffer.replace(action = all_buffer.action)
-
+            buffer_i = jax.vmap(select_env_agent, in_axes=(0, None))(all_buffer, agent_roles)
+            buffer_i = buffer_i.replace(action=all_buffer.action)
             last_obs = select_env_agent(all_last_obs, agent_roles)
             last_val = agent_fn.get_val(train_state, agent_state, last_obs)
-            advantage = buffer.compute_advantage(last_val, gamma=self.gamma, gae_lam=self.gae_lam)
-            target_val = advantage + buffer.val
+            advantage = buffer_i.compute_advantage(last_val, gamma=self.gamma, gae_lam=self.gae_lam)
             advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-            
+            advantages_all.append(advantage)
+            buffers_all.append(buffer_i)
+        
+        new_train_state_lst = []
+        for i, (agent_name, agent_fn, train_state, agent_state, agent_roles) in enumerate(
+            zip(self.env_fn.agent_lst, self.agent_fn_lst, train_state_lst, agent_state_lst, agent_roles_lst)
+        ):
+            if self.stop_training[i]:
+                new_train_state_lst.append(train_state)
+                continue
+
+            # Gather the advantages of all other agents.
+            other_advantages = [adv for j, adv in enumerate(advantages_all) if j != i and adv is not None]
+            target_val = advantages_all[i] + buffers_all[i].val  # (as before)
+
             for ppo_epoch in range(self.ppo_epochs):
                 rng, rng_model_update = jax.random.split(rng)
-                train_state, optim_log = agent_fn.learn(rng_model_update, train_state, buffer, advantage, target_val)
+                train_state, optim_log = agent_fn.learn(
+                    rng_model_update,
+                    train_state,
+                    buffers_all[i],
+                    advantages_all[i],
+                    target_val,
+                    other_advantages
+                )
             new_train_state_lst.append(train_state)
         
         runner_state = rng, new_train_state_lst, agent_state_lst, env_state, all_last_obs

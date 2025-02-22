@@ -1,5 +1,6 @@
 from typing import Any, Sequence, TypeAlias
 
+import numpy as np
 import jax
 import jax.numpy as jnp
 from .investesg import InvestESG as _InvestESG, State as _InvestESGState
@@ -13,6 +14,19 @@ Action: TypeAlias = dict[str, jax.Array]
 
 ObservationSpace: TypeAlias = dict[str, Sequence[float]]
 ActionSpace: TypeAlias = float | Sequence[float]
+
+def to_python_types(obj):
+    """Recursively convert JAX (and NumPy) arrays to Python lists or scalars."""
+    if isinstance(obj, (jnp.ndarray, np.ndarray)):
+        # Convert array to Python list (or scalar, if possible)
+        # For 0-dimensional arrays, .item() returns a native Python scalar.
+        return obj.item() if obj.ndim == 0 else obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: to_python_types(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return type(obj)(to_python_types(x) for x in obj)
+    else:
+        return obj
 
 class InvestESGConst(BaseEnvConst):
     shaped_reward_factor: float = 0.0
@@ -161,4 +175,5 @@ class InvestESGEnv(BaseEnv[InvestESGConst, InvestESGState]):
         
         d['episode'] = episode
         d.update(additional_info)
-        wandb.log(d)
+        d_serializable = to_python_types(d)
+        wandb.log(d_serializable)

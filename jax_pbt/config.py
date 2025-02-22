@@ -32,6 +32,10 @@ def get_base_parser():
     parser.add_argument('--value_clip', default=10.0, type=float, help="Clipping parameter for value function updates.")
     parser.add_argument('--grad_clip_norm', default=10.0, type=float, help="Maximum norm for gradient clipping to prevent exploding gradients.")
     parser.add_argument('--debug', default=False, type=bool, help="Debug setting. Default to false.")
+    parser.add_argument('--use_aa', default=False, type=bool, help="Use Advantage Alignment setting. Default to false.")
+    parser.add_argument('--aa_gamma', default=0.99, type=float, help="Discount for Advantage Alignment equation.")
+    parser.add_argument('--aa_beta', default=1, type=float, help="Weight of Advantage Alignment term.")
+
 
     # Neural network blocks
     parser.add_argument('--mlp_hidden_layer', default=2, type=int, help="Number of hidden layers in the MLP network.")

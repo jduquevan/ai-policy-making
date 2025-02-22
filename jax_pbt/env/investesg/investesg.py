@@ -1081,13 +1081,16 @@ class InvestESG(MultiAgentEnv):
         self.canvas.draw()
         self.canvas.flush_events()
         # plt.pause(0.001)  # Pause briefly to update plots
+        renderer = self.canvas.get_renderer()
 
         # Consider generate videos later
         if mode == 'human':
             plt.show(block=False)
         elif mode == 'rgb_array':
             width, height = self.fig.get_size_inches() * self.fig.get_dpi()
-            img = np.frombuffer(self.canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
+            width = int(float(width))
+            height = int(float(height))
+            img = np.frombuffer(renderer.buffer_rgba(), dtype='uint8').reshape(height, width, 4)
             return img
         
         
