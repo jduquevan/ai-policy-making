@@ -1,10 +1,13 @@
 from argparse import Namespace
 from collections import deque
+from flax.training import checkpoints
 from typing import Any, Callable, Sequence, TypeAlias
 from jaxmarl.environments.spaces import Box, MultiDiscrete
 
 import jax
 import jax.numpy as jnp
+import jax.tree_util as tree_util
+import os
 from tqdm import tqdm
 import wandb
 
@@ -31,6 +34,10 @@ class IPPOController(BaseController):
         self.ppo_epochs: int = args.ppo_epochs
         self.gamma: float = args.gamma
         self.gae_lam: float = args.gae_lam
+        self.self_play: bool = args.self_play
+        self.save_directory: str = args.save_directory
+        self.save_every: int = args.save_every
+        self.run_id: str = args.run_id
 
         # init env_fn
         self.env_fn: Env = env_fn
@@ -54,7 +61,6 @@ class IPPOController(BaseController):
         train_state_lst = [agent_fn.train_state_init(rng_init) for agent_fn in self.agent_fn_lst] # train_state carry all variables which will only to changed by gradient udpate and remain static in the episode
         rng, rng_reset = rng_batch_split(rng, self.num_envs)
         env_state, obs = jax.vmap(self.env_fn.reset, in_axes=(0, None))(rng_reset, env_const) # TODO: change None
-        # import pdb; pdb.set_trace()
         return rng, train_state_lst, agent_state_lst, env_state, obs
 
     def rollout(self, runner_state: RunnerState, env_const: EnvConst, agent_roles_lst: Sequence[RoleIndex]) -> tuple[RunnerState, PPOExperience, dict]:
@@ -248,7 +254,7 @@ class IPPOController(BaseController):
         
         runner_state = rng, new_train_state_lst, agent_state_lst, env_state, all_last_obs
         return runner_state, {'env_stats': env_stats, 'optim_log': optim_log}
-    
+
     def run(
         self,
         rng: jax.Array,
@@ -256,38 +262,41 @@ class IPPOController(BaseController):
         get_init_env_const: Callable[[], EnvConst] | None = None,
         get_epoch_env_const: Callable[[Env, 'IPPOController', int, EnvConst], EnvConst] | None = None,
         eval_at_steps: list[int] = None,
-        resume_trainer_state_lst: dict[int, PPOTrainState] = None,
-    ) -> None:
+        resume_runner_state: RunnerState | None = None,
+
+    ) -> RunnerState:
         print("\n" + "=" * 20 + " start compilation " + "=" * 20 +"\n")
         print("jax.jit compilation of the [ippo_controller.run_epoch] function...")
-        run_epoch_jitted = jax.jit(self.run_epoch) # jax.jit(self.run_epoch)
+        run_epoch_jitted = jax.jit(self.run_epoch)
         print("\n" + "=" * 20 + " finish compilation " + "=" * 20 +"\n")
-
+    
         if get_init_env_const is None:
             get_init_env_const = self.env_fn.get_default_const
-
+    
         env_const = get_init_env_const()
-        # TODO: test static agent_roles_lst by making it self.agent_roles_lst?
-        runner_state = self.init_runner_state(rng, env_const, agent_roles_lst)
+        # --- Initialize or resume runner state ---
+        if resume_runner_state is None:
+            runner_state = self.init_runner_state(rng, env_const, agent_roles_lst)
+        else:
+            runner_state = resume_runner_state
         rng, train_state_lst, agent_state_lst, env_state, all_obs = runner_state
         self.stop_training = [False for _ in self.agent_fn_lst]
-        if resume_trainer_state_lst is not None:
-            for i, resume_trainer_state in resume_trainer_state_lst:
-                train_state_lst[i] = resume_trainer_state
-                self.stop_training[i] = True
-        runner_state = rng, train_state_lst, agent_state_lst, env_state, all_obs
-
+    
         env_step = 0
         if eval_at_steps is None:
             eval_at_steps = []
         eval_at_steps: deque = deque(eval_at_steps)
         episode = 0
-        # TODO: eval
+        
+        # Set next_save to the first checkpoint interval
+        next_save = self.save_every 
+        checkpoint_dir = os.path.abspath(os.path.join(self.save_directory, self.run_id))
+    
         with tqdm(total=self.total_env_steps, desc="Training progress", unit="frames", position=2) as pbar:
             while env_step < self.total_env_steps:
                 env_const = get_epoch_env_const(env_fn=self.env_fn, controller=self, current_env_step=env_step, env_const=env_const)
                 runner_state, info = run_epoch_jitted(runner_state, env_const, agent_roles_lst)
-
+    
                 env_stats = info['env_stats']
                 env_step += self.episode_length * self.num_envs
                 pbar.update(self.episode_length * self.num_envs)
@@ -295,20 +304,34 @@ class IPPOController(BaseController):
                     eval_at_steps.popleft()
                     tqdm.write("=" * 20 + f"episode {episode} env_step: {env_step} / {self.total_env_steps} " + "=" * 20)
                     tqdm.write(f"\nEnv stats: {env_stats['return']}\n")
-                
+    
                 d = dict()
                 for i, ret in enumerate(env_stats['return']):
                     d[f"{i} return"] = ret
-                
+    
                 self.env_fn.log(runner_state[-2]._state, episode, d)
                 
-                # reset env manullay
+                # --- Save checkpoint if the interval has passed ---
+                if env_step >= next_save:
+                    ckpt = {
+                        'rng': jax.random.key_data(rng),
+                        'train_state': train_state_lst,
+                        'agent_state': agent_state_lst,
+                        'env_state': env_state,
+                        'all_obs': all_obs,
+                        'env_step': env_step,
+                        'episode': episode
+                    }
+                    # This will create files like "checkpoint_{env_step}"
+                    checkpoints.save_checkpoint(ckpt_dir=checkpoint_dir, target=ckpt, step=env_step, prefix="checkpoint_", keep=3)
+                    next_save += self.save_every
+    
+                # Reset environment manually after each epoch
                 rng, train_state_lst, agent_state_lst, env_state, all_obs = runner_state
                 rng, rng_reset = rng_batch_split(rng, self.num_envs)
                 env_state, all_obs = jax.vmap(self.env_fn.reset, in_axes=(0, None))(rng_reset, env_const) 
-                runner_state = rng, train_state_lst, agent_state_lst, env_state, all_obs
-                
+                runner_state = (rng, train_state_lst, agent_state_lst, env_state, all_obs)
+    
                 episode += 1
-
-                
-        return runner_state # TODO: just temperory usage
+    
+        return runner_state  # Return final state

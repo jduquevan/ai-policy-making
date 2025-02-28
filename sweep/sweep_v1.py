@@ -10,15 +10,16 @@ def gen_command(config):
 
 def run_random_job(fake_submit: bool = True):
     hparams = {
-        'ppo_epochs': [1, 2, 3, 4],
+        'ppo_epochs': [1, 2, 3],
         'use_aa': [True],
-        'aa_gamma': [0.99, 0.96, 0.9, 0.8, 0.6],
-        'aa_beta': [0.05, 0.1, 0.5, 1, 2],
-        'chunk_length': [5, 10, 15, 20, 25],
-        'use_rnn': [True, False],
-        'pi_lr': [1e-6, 1e-5, 1e-4, 1e-3],
-        'val_lr': [1e-6, 1e-5, 1e-4, 1e-3],
-        'entropy_coef': [0, 0.0001, 0.001, 0.01, 0.1],
+        'aa_gamma': [0.99, 0.96, 0.9, 0.8],
+        'aa_beta': [0.5, 1, 2, 3],
+        'chunk_length': [15, 20, 25],
+        'use_rnn': [True],
+        'pi_lr': [1e-6, 3e-6, 1e-5, 3e-5, 1e-4],
+        'val_lr': [1e-6, 1e-5, 1e-4],
+        'entropy_coef': [0.001, 0.01, 0.1],
+        'self_play': [True],
     }
 
     # sample a random config

@@ -35,7 +35,7 @@ def get_base_parser():
     parser.add_argument('--use_aa', default=False, type=bool, help="Use Advantage Alignment setting. Default to false.")
     parser.add_argument('--aa_gamma', default=0.99, type=float, help="Discount for Advantage Alignment equation.")
     parser.add_argument('--aa_beta', default=1, type=float, help="Weight of Advantage Alignment term.")
-
+    parser.add_argument('--self_play', default=False, type=bool, help="Self play setting. Default to false.")
 
     # Neural network blocks
     parser.add_argument('--mlp_hidden_layer', default=2, type=int, help="Number of hidden layers in the MLP network.")
@@ -58,6 +58,10 @@ def get_base_parser():
 
     # Environment configurations
     parser.add_argument('--env_config_name', default=None, type=str, help="Environment configuration yaml file name")
+
+    # Checkpointing
+    parser.add_argument('--save_directory', default='/network/scratch/j/juan.duque/InvestESG/checkpoints', type=str, help="Checkpointing directory")
+    parser.add_argument('--save_every', default=100000, type=int, help="Number of iterations before every checkpoint")
     
     return parser
 
