@@ -24,7 +24,7 @@ if __name__ == '__main__':
     import jax.numpy as jnp
     if args.debug:
         jax.config.update("jax_disable_jit", True)
-    rng = jax.random.key(0)
+    rng = jax.random.key(config.seed)
     if args.eval_points > 0:
         eval_at_steps = list((np.arange(args.eval_points + 1) * args.total_env_steps / args.eval_points).astype(int))
     else:

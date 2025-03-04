@@ -661,7 +661,10 @@ class InvestESG(ParallelEnv):
             plt.show(block=False)
         elif mode == 'rgb_array':
             width, height = self.fig.get_size_inches() * self.fig.get_dpi()
-            img = np.frombuffer(self.canvas.tostring_rgb(), dtype='uint8').reshape(int(height), int(width), 3)
+            renderer = self.canvas.get_renderer()
+            buffer = renderer.buffer_rgba()
+            img = np.asarray(buffer, dtype='uint8').reshape(int(height), int(width), 4)
+            img = img[..., :3]
             return img
         
         

@@ -8,6 +8,7 @@ market_performance_baseline: 1.1
 market_performance_variance: 0
 allow_resilience_investment: False
 allow_greenwash_investment: False
+company_esg_score_observable: True
 action_capping: 0.05
 max_steps: 100
 company_attributes:
@@ -29,11 +30,11 @@ company_attributes:
 
 investor_attributes:
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
 
 agent_policies:
  - mode: "PPO"
