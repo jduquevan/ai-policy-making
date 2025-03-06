@@ -30,22 +30,14 @@ export PYTHONPATH="/home/mila/j/juan.duque/projects/InvestESG:$PYTHONPATH"
 # Define all arguments
 SEED=${1}
 
-# Construct the full command
-CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
-    --total_env_steps 192_000_000 \
-    --seed ${SEED} \
-    --ppo_epochs 4 \
-    --run_id ppo_${SEED}_esg_score_10_obs_True \
-    --pi_lr 0.0001 \
-    --val_lr 0.0001 \
-    --episode_length 100 \
-    --num_minibatches 20 \
-    --num_env 32 \
-    --env_config_name exp_default_1" \
+CMD="python main.py \
+    --env_name 'exp_5*10+3*16.7' \
+    --wandb_project multigrid \
+    --seed ${SEED}" \
+
 
 # Print the full command for debugging
 stdbuf -o0 echo "Executing command: $CMD"
 
 # Execute the command
 eval $CMD
-

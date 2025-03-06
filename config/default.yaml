@@ -9,8 +9,8 @@ memory_size: 5000000  # 100000 and 1000000 did not work well
 n_actions: 7
 metacontroller: 'multiagent'
 total_timesteps: 5000000
-multithreading: False
-use_gpu: False
+multithreading: True
+use_gpu: True
 advantage_alignment: True
 
 # Learning params

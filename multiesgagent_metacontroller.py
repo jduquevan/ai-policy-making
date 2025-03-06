@@ -55,9 +55,10 @@ def multithreaded_processing(function, policies, multithreading=True):
             function(polid, policy)
 
 class DummyGymEnv(gym.Env):
-    def __init__(self, observation_space, action_space):
+    def __init__(self, observation_space, action_space, render_mode='rgb_array'):
         self.observation_space = observation_space
         self.action_space = action_space
+        self.render_mode = render_mode
 
 
 class MultiESGAgent():
@@ -144,8 +145,8 @@ class MultiESGAgent():
         self.buffer = []
         self.debug = debug
         self.model_others = False
-        self.company_initial_memory = config.company_initial_memory if hasattr(config, "company_initial_memory") else 0
-        self.investor_initial_memory = config.investor_initial_memory if hasattr(config, "investor_initial_memory") else 0
+        self.company_initial_memory = config.get("company_initial_memory", 0)
+        self.investor_initial_memory = config.get("investor_initial_memory", 0)
 
     def learn(
         self,
