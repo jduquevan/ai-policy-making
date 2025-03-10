@@ -38,6 +38,7 @@ class IPPOController(BaseController):
         self.save_directory: str = args.save_directory
         self.save_every: int = args.save_every
         self.run_id: str = args.run_id
+        self.sum_rewards: bool = args.sum_rewards
 
         # init env_fn
         self.env_fn: Env = env_fn
@@ -207,6 +208,11 @@ class IPPOController(BaseController):
             'done': all_buffer.done
         }
         
+        if self.sum_rewards:
+            sum_rewards = all_buffer.reward.sum(axis=-1)
+            sum_rewards_broadcast = jnp.repeat(sum_rewards[..., jnp.newaxis], repeats=self.num_agents, axis=-1)
+            all_buffer = all_buffer.replace(reward=sum_rewards_broadcast)
+
         rng, train_state_lst, agent_state_lst, env_state, all_last_obs = runner_state
 
         # Compute individual advantages for all agents.

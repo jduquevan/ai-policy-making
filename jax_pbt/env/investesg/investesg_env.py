@@ -28,6 +28,27 @@ def to_python_types(obj):
     else:
         return obj
 
+def gini_coefficient_jax(values: jnp.ndarray) -> jnp.ndarray:
+    """
+    Compute the Gini coefficient for a 1D JAX array of non-negative values.
+    Returns a scalar jnp.float32 or jnp.float64, depending on `values`.
+    """
+    # Sum all values
+    total = jnp.sum(values)
+
+    # Sort in ascending order
+    sorted_vals = jnp.sort(values)
+    n = values.shape[0]
+    def normal_gini(sorted_x):
+        cumulative = jnp.cumsum(sorted_x)
+        # Using a standard discrete formula:
+        # G = 1 - (2 / (n - 1)) * sum( (n - 1 - i) * x[i] ) / cumulative[-1]
+        return 1.0 - (2.0 / (n - 1)) * (
+            jnp.sum((n - 1 - jnp.arange(n)) * sorted_x) / cumulative[-1]
+        )
+    gini_value = jnp.where(total == 0.0, 0.0, normal_gini(sorted_vals))
+    return gini_value
+
 class InvestESGConst(BaseEnvConst):
     shaped_reward_factor: float = 0.0
 
@@ -135,7 +156,7 @@ class InvestESGEnv(BaseEnv[InvestESGConst, InvestESGState]):
             history_investor_rewards = state.history_investor_rewards
             history_company_bankrupt = state.history_company_bankrupt
             history_company_margin = state.history_company_margin
-
+        
         d = {
             "episode": episode,
             "total climate_event_occurs": sum(history_climate_event_occurs),
@@ -172,7 +193,9 @@ class InvestESGEnv(BaseEnv[InvestESGConst, InvestESGState]):
             img = self.render(state=state, mode='rgb_array')
             images = wandb.Image(img)
             d["figure"] = images
-        
+        company_investments = jnp.sum(history_investment_matrix, axis=0)
+        company_investment_gini = gini_coefficient_jax(company_investments)
+        d["company_investment_gini"] = company_investment_gini  # JAX scalar
         d['episode'] = episode
         d.update(additional_info)
         d_serializable = to_python_types(d)

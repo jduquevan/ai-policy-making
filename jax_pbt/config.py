@@ -36,6 +36,7 @@ def get_base_parser():
     parser.add_argument('--aa_gamma', default=0.99, type=float, help="Discount for Advantage Alignment equation.")
     parser.add_argument('--aa_beta', default=1, type=float, help="Weight of Advantage Alignment term.")
     parser.add_argument('--self_play', default=False, type=bool, help="Self play setting. Default to false.")
+    parser.add_argument('--sum_rewards', default=False, type=bool, help="Sum rewards flag. Default to false.")
 
     # Neural network blocks
     parser.add_argument('--mlp_hidden_layer', default=2, type=int, help="Number of hidden layers in the MLP network.")
