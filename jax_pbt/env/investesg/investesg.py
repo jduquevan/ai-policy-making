@@ -350,6 +350,7 @@ class InvestESG(MultiAgentEnv):
         uncertain_economic_damage=False,
         new_bankrupt_standard=False,
         fixed_random_seed=True,
+        zero_climate_events=False,
         **kwargs
     ):
         self.max_steps = max_steps
@@ -402,6 +403,7 @@ class InvestESG(MultiAgentEnv):
         self.uncertain_economic_damage = uncertain_economic_damage # Companies will suffer from uncertain amount of economic damage if true, default false
         self.new_bankrupt_standard = new_bankrupt_standard # Companies have margin < -10% for 3 consecutive years will go bankrupt under new standard, default false
         self.fixed_random_seed = fixed_random_seed # Fix the underlying across training episode, default true
+        self.zero_climate_events = zero_climate_events
 
         # initialize investors with initial investments dictionary
         for idx, investor in enumerate(self.investors):
@@ -545,6 +547,10 @@ class InvestESG(MultiAgentEnv):
         heat_prob = self.initial_heat_prob + 0.0083*state.time/(1+0.0222*total_mitigation_investment)
         precip_prob = self.initial_precip_prob + 0.0018*state.time/(1+0.0326*total_mitigation_investment)
         drought_prob = self.initial_drought_prob + 0.003*state.time/(1+0.038*total_mitigation_investment)
+        if self.zero_climate_events:   
+            heat_prob = 0
+            precip_prob = 0
+            drought_prob = 0
         climate_risk = 1 - (1-heat_prob)*(1-precip_prob)*(1-drought_prob)
         state = state.replace(
             heat_prob = heat_prob,
