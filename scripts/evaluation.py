@@ -19,11 +19,11 @@ from jax_pbt.utils import RoleIndex, rng_batch_split, select_env_agent
 ######################################
 def always_defect_action():
     """3D action to invest fully in resilience: (0,0,0.1)."""
-    return jnp.array([0.0, 0.0, 0.1], dtype=jnp.float32)
+    return jnp.array([0.0, 0.0, 0.0], dtype=jnp.float32)
 
 def always_cooperate_action():
     """3D action to invest fully in mitigation: (0.1, 0, 0)."""
-    return jnp.array([0.1, 0.0, 0.0], dtype=jnp.float32)
+    return jnp.array([0.005, 0.0, 0.0], dtype=jnp.float32)
 
 ######################################
 # 2) Extract final capitals
