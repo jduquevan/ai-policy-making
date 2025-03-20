@@ -62,7 +62,7 @@ def get_base_parser():
 
     # Checkpointing
     parser.add_argument('--save_directory', default='/network/scratch/j/juan.duque/InvestESG/checkpoints', type=str, help="Checkpointing directory")
-    parser.add_argument('--save_every', default=100000, type=int, help="Number of iterations before every checkpoint")
+    parser.add_argument('--save_every', default=200, type=int, help="Number of iterations before every checkpoint")
     
     return parser
 
