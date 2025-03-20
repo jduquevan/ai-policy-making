@@ -548,9 +548,9 @@ class InvestESG(MultiAgentEnv):
         precip_prob = self.initial_precip_prob + 0.0018*state.time/(1+0.0326*total_mitigation_investment)
         drought_prob = self.initial_drought_prob + 0.003*state.time/(1+0.038*total_mitigation_investment)
         if self.zero_climate_events:
-            heat_prob = jnp.zeros_like(heat_prob, dtype=jnp.float32)
-            precip_prob = jnp.zeros_like(precip_prob, dtype=jnp.float32)
-            drought_prob = jnp.zeros_like(drought_prob, dtype=jnp.float32)
+            heat_prob = jnp.ones_like(heat_prob, dtype=jnp.float32)*0.4
+            precip_prob = jnp.ones_like(precip_prob, dtype=jnp.float32)*0.4
+            drought_prob = jnp.ones_like(drought_prob, dtype=jnp.float32)*0.4
         climate_risk = 1 - (1-heat_prob)*(1-precip_prob)*(1-drought_prob)
         state = state.replace(
             heat_prob = heat_prob,

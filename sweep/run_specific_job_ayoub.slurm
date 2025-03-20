@@ -32,12 +32,12 @@ SEED=${1}
 
 # Construct the full command
 CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
-    --total_env_steps 192_000_000 \
+    --total_env_steps 384_000_000 \ 
     --seed ${SEED} \
     --ppo_epochs 4 \
     --entropy_coef 0.03 \
     --chunk_length 10 \
-    --run_id investesg_${SEED}_exp_10_esgd_true_ce_0 \
+    --run_id investesg_${SEED}_exp_0_esgd_true_ce_0_soc \
     --episode_length 100 \
     --num_minibatches 20 \
     --num_env 48 \
