@@ -9,7 +9,7 @@ market_performance_variance: 0
 allow_resilience_investment: False
 allow_greenwash_investment: False
 company_esg_score_observable: True
-zero_climate_events: True
+zero_climate_events: False
 action_capping: 0.05
 max_steps: 100
 company_attributes:

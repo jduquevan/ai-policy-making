@@ -169,7 +169,7 @@ class IPPOController(BaseController):
 
 
         rng, train_state_lst, agent_state_lst, env_state, all_obs = runner_state
-
+        
         init_transition = PPOExperience(
                 obs=all_obs,
                 action=init_action,
@@ -318,7 +318,7 @@ class IPPOController(BaseController):
                 self.env_fn.log(runner_state[-2]._state, episode, d)
                 
                 # --- Save checkpoint if the interval has passed ---
-                if env_step >= next_save:
+                if episode >= next_save:
                     ckpt = {
                         'rng': jax.random.key_data(rng),
                         'train_state': train_state_lst,
@@ -329,7 +329,7 @@ class IPPOController(BaseController):
                         'episode': episode
                     }
                     # This will create files like "checkpoint_{env_step}"
-                    checkpoints.save_checkpoint(ckpt_dir=checkpoint_dir, target=ckpt, step=env_step, prefix="checkpoint_", keep=3)
+                    checkpoints.save_checkpoint(ckpt_dir=checkpoint_dir, target=ckpt, step=episode, prefix="checkpoint_", keep=10)
                     next_save += self.save_every
     
                 # Reset environment manually after each epoch
