@@ -351,6 +351,9 @@ class InvestESG(MultiAgentEnv):
         new_bankrupt_standard=False,
         fixed_random_seed=True,
         zero_climate_events=False,
+        climate_sensitivity=0.05,
+        
+
         **kwargs
     ):
         self.max_steps = max_steps
@@ -404,6 +407,8 @@ class InvestESG(MultiAgentEnv):
         self.new_bankrupt_standard = new_bankrupt_standard # Companies have margin < -10% for 3 consecutive years will go bankrupt under new standard, default false
         self.fixed_random_seed = fixed_random_seed # Fix the underlying across training episode, default true
         self.zero_climate_events = zero_climate_events
+
+        self.climate_sensitivity = climate_sensitivity
 
         # initialize investors with initial investments dictionary
         for idx, investor in enumerate(self.investors):
@@ -552,12 +557,22 @@ class InvestESG(MultiAgentEnv):
             precip_prob = jnp.ones_like(precip_prob, dtype=jnp.float32)*0.4
             drought_prob = jnp.ones_like(drought_prob, dtype=jnp.float32)*0.4
         climate_risk = 1 - (1-heat_prob)*(1-precip_prob)*(1-drought_prob)
+        # Original
+        # state = state.replace(
+        #     heat_prob = heat_prob,
+        #     precip_prob = precip_prob,
+        #     drought_prob = drought_prob,
+        #     climate_risk = climate_risk
+        # )
+
+
         state = state.replace(
-            heat_prob = heat_prob,
-            precip_prob = precip_prob,
-            drought_prob = drought_prob,
-            climate_risk = climate_risk
-        )
+            heat_prob=heat_prob * self.climate_sensitivity,
+            precip_prob=precip_prob * self.climate_sensitivity,
+            drought_prob=drought_prob * self.climate_sensitivity,
+            climate_risk=climate_risk
+            )
+
 
         # 4. market performance and climate event evolution
         rng_key = key

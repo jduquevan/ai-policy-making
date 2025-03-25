@@ -13,7 +13,7 @@ def parse_tuple(s):
 def get_base_parser():
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('--seed', default=0, type=int, help="Random seed for the entire process.")
+    parser.add_argument('--seed', default=42, type=int, help="Random seed for the entire process.")
     parser.add_argument('--run_id', default='default', type=str, help="Identifier for the experiment run.")
     parser.add_argument('--algo', default='ippo', choices=['ippo'], help="Reinforcement Learning algorithm to use.")
     parser.add_argument('--total_env_steps', default=1_000_000, type=int, help="Total number of environment interaction steps.")

@@ -145,6 +145,7 @@ def run_scenario(
 
 ######################################
 # 5) Main: python scripts/evaluation.py --run_id "investesg_42" --episode_length 100 --num_env 64 --env_config_name exp_default_1 --debug True
+# python scripts/evaluation.py --run_id "investesg_42_esg_pref_10__score_not_observ_192m" --episode_length 100 --num_env 64 --env_config_name exp_default_1 --debug True --save_directory /network/scratch/a/ayoub.echchahed/InvestESG/checkpoints
 ######################################
 def main():
     parser = get_base_parser()
@@ -247,7 +248,7 @@ def main():
     plt.gca()
     plt.xlabel("Number of Trained Companies")
     plt.ylabel("Individual Ending Capital (avg)")
-    plt.title("Forced Defectors (red) vs Forced Cooperators (blue)")
+    plt.title("ESG Score 10")
     plt.legend()
     plt.tight_layout()
     plt.savefig("evaluation_plot.png", dpi=300)
