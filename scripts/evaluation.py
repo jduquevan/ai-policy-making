@@ -247,10 +247,10 @@ def main():
     plt.gca()
     plt.xlabel("Number of Trained Companies")
     plt.ylabel("Individual Ending Capital (avg)")
-    plt.title("Forced Defectors (red) vs Forced Cooperators (blue)")
+    plt.title("ESG Score 0")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("evaluation_plot.png", dpi=300)
+    plt.savefig("evaluation_plot_esg_0_d_true.png", dpi=300)
     plt.show()
 
 if __name__ == "__main__":

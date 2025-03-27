@@ -34,17 +34,16 @@ SEED=${1}
 CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --total_env_steps 192_000_000 \
     --seed ${SEED} \
-    --ppo_epochs 2 \
+    --ppo_epochs 1 \
     --use_aa True \
     --aa_gamma 0.96 \
-    --aa_beta 1 \
-    --entropy_coef 0.05 \
+    --aa_beta 1.5 \
+    --entropy_coef 0.03 \
     --self_play True \
-    --chunk_length 25 \
-    --run_id investesg_${SEED}_exp_0_aa \
+    --run_id investesg_${SEED}_exp_0_aa_true_ent_0.03 \
     --episode_length 100 \
     --num_minibatches 20 \
-    --num_env 32 \
+    --num_env 48 \
     --env_config_name exp_default_1" \
 
 # Print the full command for debugging
