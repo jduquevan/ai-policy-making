@@ -37,12 +37,12 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --ppo_epochs 4 \
     --entropy_coef 0.03 \
     --chunk_length 10 \
-    --run_id investesg_${SEED}_exp_10_esgd_true_ce_0 \
+    --run_id investesg_${SEED}_esg_pref_0_with_disclosure_192m_climate_exposure_0.01 \
     --episode_length 100 \
     --num_minibatches 20 \
-    --num_env 48 \
+    --num_envs 48 \
     --env_config_name exp_default_1 \
-    --save_directory /network/scratch/a/ayoub.echchahed/InvestESG/checkpoints" \
+    --save_directory /network/scratch/a/ayoub.echchahed/InvestESG/checkpoints"
 
 # Print the full command for debugging
 stdbuf -o0 echo "Executing command: $CMD"

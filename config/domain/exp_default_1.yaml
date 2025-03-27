@@ -12,6 +12,7 @@ company_esg_score_observable: True
 zero_climate_events: False
 action_capping: 0.05
 max_steps: 100
+climate_sensitivity: 0.05
 company_attributes:
  - capital: 10
    climate_risk_exposure: 0.07

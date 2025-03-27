@@ -145,6 +145,7 @@ def run_scenario(
 
 ######################################
 # 5) Main: python scripts/evaluation.py --run_id "investesg_42" --episode_length 100 --num_env 64 --env_config_name exp_default_1 --debug True
+# python scripts/evaluation.py --run_id "investesg_42_esg_pref_10__score_not_observ_192m" --episode_length 100 --num_env 64 --env_config_name exp_default_1 --debug True --save_directory /network/scratch/a/ayoub.echchahed/InvestESG/checkpoints
 ######################################
 def main():
     parser = get_base_parser()
