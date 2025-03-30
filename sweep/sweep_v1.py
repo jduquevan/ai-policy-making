@@ -15,11 +15,11 @@ def run_random_job(fake_submit: bool = True):
         'aa_gamma': [0.99, 0.96, 0.9, 0.8],
         'aa_beta': [0.5, 1, 2, 3],
         'chunk_length': [15, 20, 25],
-        'use_rnn': [True],
+        'use_rnn': [False],
         'pi_lr': [1e-6, 3e-6, 1e-5, 3e-5, 1e-4],
         'val_lr': [1e-6, 1e-5, 1e-4],
         'entropy_coef': [0.001, 0.01, 0.1],
-        'self_play': [True],
+        'self_play': [False],
     }
 
     # sample a random config
