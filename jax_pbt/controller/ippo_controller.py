@@ -54,13 +54,22 @@ class IPPOController(BaseController):
             self.agent_fn_lst = [PPOAgent.init(None, ind_args, obs_space, action_space, model_config) for ind_args, model_config in zip(args_lst, model_config_lst)]
         
     def init_runner_state(self, rng: jax.Array, env_const: EnvConst, agent_roles_lst: Sequence[RoleIndex]) -> RunnerState:
+        rng, rng_init = jax.random.split(rng)
+        rng, rng_reset = rng_batch_split(rng, self.num_envs)
+        company_indices = [i for i, name in enumerate(self.env_fn.agent_lst) if name.startswith("company_")]
+        investor_indices = [i for i, name in enumerate(self.env_fn.agent_lst) if name.startswith("investor_")]
         agent_state_lst = [
             agent_fn.agent_state_init(batch_shape=(len(agent_roles),))
             for agent_fn, agent_roles in zip(self.agent_fn_lst, agent_roles_lst)
         ]
-        rng, rng_init = jax.random.split(rng)
-        train_state_lst = [agent_fn.train_state_init(rng_init) for agent_fn in self.agent_fn_lst] # train_state carry all variables which will only to changed by gradient udpate and remain static in the episode
-        rng, rng_reset = rng_batch_split(rng, self.num_envs)
+        if self.self_play:
+            rng_init_company, rng_init_investor = jax.random.split(rng_init, 2)
+            company_train_state = self.agent_fn_lst[company_indices[0]].train_state_init(rng_init_company)
+            investor_train_state = self.agent_fn_lst[investor_indices[0]].train_state_init(rng_init_investor)
+            train_state_lst = [company_train_state if name.startswith("company_") else investor_train_state for i, name in enumerate(self.env_fn.agent_lst)]
+        else:
+            train_state_lst = [agent_fn.train_state_init(rng_init) for agent_fn in self.agent_fn_lst] # train_state carry all variables which will only to changed by gradient udpate and remain static in the episode
+            
         env_state, obs = jax.vmap(self.env_fn.reset, in_axes=(0, None))(rng_reset, env_const) # TODO: change None
         return rng, train_state_lst, agent_state_lst, env_state, obs
 
@@ -234,14 +243,20 @@ class IPPOController(BaseController):
             advantages_all.append(advantage)
             buffers_all.append(buffer_i)
         
-        new_train_state_lst = []
+        if self.self_play:
+            new_train_state_lst = list(train_state_lst)
+        else:
+            new_train_state_lst = []
+
         for i, (agent_name, agent_fn, train_state, agent_state, agent_roles) in enumerate(
             zip(self.env_fn.agent_lst, self.agent_fn_lst, train_state_lst, agent_state_lst, agent_roles_lst)
         ):
             if self.stop_training[i]:
                 new_train_state_lst.append(train_state)
                 continue
-
+           
+            company_indices = [i for i, name in enumerate(self.env_fn.agent_lst) if name.startswith("company")]
+            investor_indices = [i for i, name in enumerate(self.env_fn.agent_lst) if name.startswith("investor")]
             # Gather the advantages of all other agents.
             other_advantages = [adv for j, adv in enumerate(advantages_all) if j != i and adv is not None]
             target_val = advantages_all[i] + buffers_all[i].val  # (as before)
@@ -256,8 +271,17 @@ class IPPOController(BaseController):
                     target_val,
                     other_advantages
                 )
-            new_train_state_lst.append(train_state)
-        
+            
+            if self.self_play:
+                if i in company_indices:
+                    indices = company_indices
+                else:
+                    indices = investor_indices
+                for j in indices:
+                    new_train_state_lst[j] = train_state
+            else:
+                new_train_state_lst.append(train_state)
+
         runner_state = rng, new_train_state_lst, agent_state_lst, env_state, all_last_obs
         return runner_state, {'env_stats': env_stats, 'optim_log': optim_log}
 
