@@ -15,7 +15,7 @@
 #SBATCH -N 1 #nodes
 #SBATCH -n 1 #tasks
 #SBATCH --mem=40G
-#SBATCH --time=0-11:59:00
+#SBATCH --time=0-02:59:00
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --partition=long
 
@@ -36,14 +36,16 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --seed ${SEED} \
     --ppo_epochs 1 \
     --use_aa True \
-    --aa_gamma 0.96 \
-    --aa_beta 1.5 \
-    --entropy_coef 0.03 \
+    --aa_gamma 0.9 \
+    --aa_beta 1 \
+    --pi_lr 1e-4\
+    --val_lr 1e-4\
+    --entropy_coef 0.05 \
     --self_play True \
-    --run_id investesg_${SEED}_exp_0_aa_true_ent_0.03 \
+    --run_id investesg_${SEED}_exp_0_aa_true_1_ent_0.05_lr_1e-4 \
     --episode_length 100 \
     --num_minibatches 20 \
-    --num_env 48 \
+    --num_env 64 \
     --env_config_name exp_default_1" \
 
 # Print the full command for debugging
