@@ -40,9 +40,9 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --aa_beta 1 \
     --pi_lr 1e-4\
     --val_lr 1e-4\
-    --entropy_coef 0.05 \
+    --entropy_coef 0.03 \
     --self_play True \
-    --run_id investesg_${SEED}_exp_0_aa_true_1_ent_0.05_lr_1e-4 \
+    --run_id investesg_${SEED}_exp_0_aa_true_1_ent_0.03_lr_1e-4 \
     --episode_length 100 \
     --num_minibatches 20 \
     --num_env 64 \

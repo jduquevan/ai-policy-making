@@ -12,7 +12,7 @@ company_esg_score_observable: True
 zero_climate_events: False
 action_capping: 0.05
 max_steps: 100
-climate_sensitivity: 0.05
+climate_sensitivity: 1
 company_attributes:
  - capital: 10
    climate_risk_exposure: 0.07
@@ -32,11 +32,11 @@ company_attributes:
 
 investor_attributes:
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
 
 agent_policies:
  - mode: "PPO"

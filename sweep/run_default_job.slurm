@@ -35,7 +35,7 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --total_env_steps 192_000_000 \
     --seed ${SEED} \
     --ppo_epochs 4 \
-    --run_id ppo_${SEED}_esg_score_10_obs_True \
+    --run_id ppo_${SEED}_esg_score_0_obs_True \
     --pi_lr 0.0001 \
     --val_lr 0.0001 \
     --entropy_coef 0.03 \

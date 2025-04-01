@@ -30,19 +30,25 @@ def always_cooperate_action():
 ######################################
 def extract_company_capitals_from_obs(all_obs, num_companies=5):
     """
-    'all_obs' is a dict: {agent_name -> jnp.array([num_envs, obs_dim])}.
-    We pick the first agent's array (identical for all), then parse out
-    each company's capital. Each company c has a 7-feature block
-    [capital=offset c*7].
+    'all_obs' is a dict containing an observation array under key 'obs' with shape [num_envs, num_agents, obs_dim].
+    For example, (64, 8, 41) where:
+      - 64 = number of parallel environments,
+      - 8 = number of agents (5 companies + 3 investors),
+      - 41 = total observation dimension.
+      
+    We assume that the observations are shared across agents, so we pick the first agent's observation.
+    The first 20 features (5 companies * 4 features each) correspond to company data in the order:
+      [capital, resilience, esg_score, margin] for each company.
+      
+    This function reshapes the company data and extracts the capital (the first feature for each company),
+    returning an array of shape [num_envs, num_companies].
     """
-    first_agent_key = next(iter(all_obs.keys()))
-    obs_mat = all_obs[first_agent_key]  # shape [num_envs, obs_dim]
-
-    caps_list = []
-    for c in range(num_companies):
-        idx = c * 7
-        caps_list.append(obs_mat[:, idx])
-    return jnp.stack(caps_list, axis=1)  # shape [num_envs, num_companies]
+    obs_mat = all_obs['obs'][:, 0, :]  # shape: (num_envs, 41)
+    company_obs_flat = obs_mat[:, :num_companies * 4]  # shape: (num_envs, 20)
+    company_obs = company_obs_flat.reshape(-1, num_companies, 4)
+    company_capitals = company_obs[..., 0]  # shape: (num_envs, num_companies)
+    
+    return company_capitals
 
 ######################################
 # 3) Overwrite checkpoint parameters only
@@ -202,7 +208,7 @@ def main():
     # with x-axis from 5 down to 1
     ###########################################
     forced_counts = [5,4,3,2,1]
-    trained_companies = [1,2,3,4,5]
+    trained_companies = [0,1,2,3,4]
     defector_payoffs = []
     cooperator_payoffs = []
 
@@ -225,7 +231,7 @@ def main():
         )
         def_caps = final_caps_def[:, forced_indices]
         defector_payoffs.append(float(def_caps.mean()))
-
+        
         # forced coop
         _, final_caps_coop = run_scenario(
             controller=controller,
@@ -248,10 +254,10 @@ def main():
     plt.gca()
     plt.xlabel("Number of Trained Companies")
     plt.ylabel("Individual Ending Capital (avg)")
-    plt.title("ESG Score 0")
+    plt.title("ESG Score 10")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("evaluation_plot_esg_0_d_true.png", dpi=300)
+    plt.savefig("evaluation_plot_esg_10_d_true.png", dpi=300)
     plt.show()
 
 if __name__ == "__main__":
