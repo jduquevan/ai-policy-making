@@ -32,11 +32,11 @@ company_attributes:
 
 investor_attributes:
  - capital: 16.7
-   esg_preference: 10
+   esg_preference: 0
  - capital: 16.7
-   esg_preference: 10
+   esg_preference: 0
  - capital: 16.7
-   esg_preference: 10
+   esg_preference: 0
 
 agent_policies:
  - mode: "PPO"
