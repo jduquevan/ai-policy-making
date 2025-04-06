@@ -15,7 +15,7 @@
 #SBATCH -N 1 #nodes
 #SBATCH -n 1 #tasks
 #SBATCH --mem=40G
-#SBATCH --time=0-06:59:00
+#SBATCH --time=0-04:59:00
 #SBATCH --gres=gpu:l40s:1
 #SBATCH --partition=long
 
@@ -41,7 +41,7 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --entropy_coef 0.03 \
     --episode_length 100 \
     --num_minibatches 20 \
-    --num_env 48 \
+    --num_env 64 \
     --env_config_name exp_default_1" \
 
 # Print the full command for debugging
