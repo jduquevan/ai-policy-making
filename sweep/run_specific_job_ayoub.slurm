@@ -37,7 +37,7 @@ CMD="CUDA_VISIBLE_DEVICES=0 python scripts/investesg.py \
     --ppo_epochs 4 \
     --entropy_coef 0.03 \
     --chunk_length 10 \
-    --run_id investesg_${SEED}_esg_pref_10_baseline_ppo_natasha_test \
+    --run_id investesg_${SEED}_esg_pref_10_ppo_lambda_scaling_70 \
     --episode_length 100 \
     --num_minibatches 20 \
     --num_envs 48 \

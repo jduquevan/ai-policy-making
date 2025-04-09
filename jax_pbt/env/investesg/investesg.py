@@ -352,6 +352,7 @@ class InvestESG(MultiAgentEnv):
         fixed_random_seed=True,
         zero_climate_events=False,
         climate_sensitivity=0.05,
+        lambda_scaling=1,
         
 
         **kwargs
@@ -409,6 +410,7 @@ class InvestESG(MultiAgentEnv):
         self.zero_climate_events = zero_climate_events
 
         self.climate_sensitivity = climate_sensitivity
+        self.lambda_scaling = lambda_scaling
 
         # initialize investors with initial investments dictionary
         for idx, investor in enumerate(self.investors):
@@ -549,14 +551,26 @@ class InvestESG(MultiAgentEnv):
 
         # 3. update probabilities of climate event based on cumulative ESG investments across companies
         total_mitigation_investment = jnp.sum(jnp.array([company.cumu_mitigation_amount for company in state.companies]))
-        heat_prob = self.initial_heat_prob + 0.0083*state.time/(1+0.0222*total_mitigation_investment)
-        precip_prob = self.initial_precip_prob + 0.0018*state.time/(1+0.0326*total_mitigation_investment)
-        drought_prob = self.initial_drought_prob + 0.003*state.time/(1+0.038*total_mitigation_investment)
+        
+        # With lambda scaling factor
+        heat_prob = self.initial_heat_prob + 0.0083*state.time/(1 + (0.0222 * self.lambda_scaling * total_mitigation_investment))
+        precip_prob = self.initial_precip_prob + 0.0018*state.time/(1 + (0.0326 * self.lambda_scaling * total_mitigation_investment))
+        drought_prob = self.initial_drought_prob + 0.003*state.time/(1 + (0.038 * self.lambda_scaling * total_mitigation_investment))
+        
+        # Original
+        # heat_prob = self.initial_heat_prob + 0.0083*state.time/(1+0.0222*total_mitigation_investment)
+        # precip_prob = self.initial_precip_prob + 0.0018*state.time/(1+0.0326*total_mitigation_investment)
+        # drought_prob = self.initial_drought_prob + 0.003*state.time/(1+0.038*total_mitigation_investment)
+        
+        
         if self.zero_climate_events:
             heat_prob = jnp.ones_like(heat_prob, dtype=jnp.float32)*0.4
             precip_prob = jnp.ones_like(precip_prob, dtype=jnp.float32)*0.4
             drought_prob = jnp.ones_like(drought_prob, dtype=jnp.float32)*0.4
+
         climate_risk = 1 - (1-heat_prob)*(1-precip_prob)*(1-drought_prob)
+        
+        
         # Original
         # state = state.replace(
         #     heat_prob = heat_prob,
