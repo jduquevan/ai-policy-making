@@ -169,17 +169,20 @@ def main():
 
     # CHANGES BEGIN:
     # Here we define the 9 run_ids for the ESG pref=0 baseline using the new training runs.
-    run_ids = [
-        "investesg_42_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_44_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_45_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_46_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_47_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_48_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_49_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_50_esg_pref_0_baseline_ppo_natasha_test",
-        "investesg_51_esg_pref_0_baseline_ppo_natasha_test"
-    ]
+
+    run_ids = ["investesg_42_esg_pref_10_ppo_lambda_scaling_1000"]
+
+    # run_ids = [
+    #     "investesg_42_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_44_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_45_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_46_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_47_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_48_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_49_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_50_esg_pref_0_baseline_ppo_natasha_test",
+    #     "investesg_51_esg_pref_0_baseline_ppo_natasha_test"
+    # ]
     # CHANGES END
 
     # Setup configuration: always 5 companies.
@@ -308,10 +311,10 @@ def main():
 
     plt.xlabel("Number of Trained Companies")
     plt.ylabel("Individual Ending Capital (avg)")
-    plt.title("ESG pref=0 Baseline (PPO Natasha Test): Mean ± Std over 9 seeds")
+    plt.title("ESG pref=10 Baseline (lambda scaling=1000)")
     plt.legend()
     plt.tight_layout()
-    plt.savefig("evaluation_plot_esg_0_multi_seed_ppo_natasha_test.png", dpi=300)
+    plt.savefig("evaluation_plot_esg_10_lambda_scaling_1000.png", dpi=300)
     plt.show()
 
 if __name__ == "__main__":
