@@ -2,13 +2,13 @@
 domain: InvestESG
 num_investors: 3
 num_companies: 5
-fixed_random_seed: False
+fixed_random_seed: True
 initial_climate_event_probability: 0.5
 market_performance_baseline: 1.1
 market_performance_variance: 0
 allow_resilience_investment: False
 allow_greenwash_investment: False
-company_esg_score_observable: True
+company_esg_score_observable: False
 zero_climate_events: False
 action_capping: 0.05
 max_steps: 100
@@ -32,11 +32,11 @@ company_attributes:
 
 investor_attributes:
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
  - capital: 16.7
-   esg_preference: 0
+   esg_preference: 10
 
 agent_policies:
  - mode: "PPO"
