@@ -47,22 +47,44 @@ def extract_company_capitals_from_obs(all_obs, num_companies=5):
 ######################################
 # 3) Extract market total wealth
 ######################################
-def extract_market_total_wealth_from_obs(all_obs, num_companies=5):
+def extract_market_total_wealth_from_obs(all_obs, num_companies=5, num_investors=3):
     """
-    'all_obs' is a dict: {'obs' -> jnp.array([num_envs, num_agent, obs_dim])}.
-    We pick the first agent's array (identical for all), then parse out
-    each company's capital.
-    Each company c has a 4-feature block: [capital, resilience, esg_score, margin].
+    Extract total market wealth = sum_of_company_capitals + sum_of_leftover_investor_cash
+    from the environment's single shared observation.
+
+    'all_obs' is a dict: {'agent_0': jnp.array([...]), ...}.
+    We'll pick the first agent's obs since they are identical for all agents by design.
     """
     first_agent_key = next(iter(all_obs.keys()))
-    obs_mat = all_obs[first_agent_key]  # shape [num_envs, num_agent, obs_dim]
+    obs_mat = all_obs[first_agent_key]  # shape [num_envs, num_agents, obs_dim]
 
-    # all agent observation should be the same, so take the first one
-    caps_list = []
-    for c in range(num_companies):
-        idx = c * 4
-        caps_list.append(obs_mat[:, 0, idx])
-    return jnp.stack(caps_list, axis=1)  # shape [num_envs, num_companies]
+    single_obs = obs_mat[:, 0, :]  # shape [num_envs, obs_dim]
+    company_block_size = num_companies * 4
+    investor_block_size = num_investors * (num_companies + 1)
+
+    # Extract the company block: shape => [num_envs, company_block_size]
+    company_block = single_obs[:, :company_block_size]
+    # Reshape so we get an [num_envs, num_companies, 4]
+    company_block = company_block.reshape(-1, num_companies, 4)
+    company_capital = company_block[:, :, 0]  # shape [num_envs, num_companies]
+    sum_of_companies = jnp.sum(company_capital, axis=1)  # [num_envs]
+
+    # Extract the investor block
+    start_idx = company_block_size
+    end_idx = company_block_size + investor_block_size
+    investor_block = single_obs[:, start_idx:end_idx]  # shape [num_envs, investor_block_size]
+    investor_block = investor_block.reshape(-1, num_investors, num_companies + 1)
+    investments = investor_block[:, :, :num_companies]  # [num_envs, num_investors, num_companies]
+    net_worth = investor_block[:, :, -1]                # [num_envs, num_investors]
+
+    # leftover_cash = net_worth - sum_of_investments
+    sum_of_invested = jnp.sum(investments, axis=2)  # [num_envs, num_investors]
+    leftover_cash = net_worth - sum_of_invested
+    sum_of_investor_cash = jnp.sum(leftover_cash, axis=1)  # [num_envs]
+
+    total_wealth = sum_of_companies + sum_of_investor_cash  # [num_envs]
+
+    return jnp.mean(total_wealth)
 
 ######################################
 # 4) Overwrite checkpoint parameters only
@@ -158,7 +180,6 @@ def run_scenario(
             )
         ):
             if not agent_name.startswith("company_"):
-                # Investor => loaded policy
                 obs_i = select_env_agent(obs, agent_roles)
                 rng, rng_action = rng_batch_split(rng, len(agent_roles))
                 next_agent_state, action, log_p, val = jax.vmap(
@@ -198,15 +219,84 @@ def run_scenario(
     return new_runner_state, final_company_capitals
 
 ######################################
-# 7) Main
+# NEW: Run scenario with all companies forced to cooperate except one “target”
 ######################################
-def main():
-    parser = get_base_parser()
-    args = parser.parse_args()
+def run_scenario_schelling(controller, runner_state, num_steps: int, num_other_cooperators: int, target_forced_action: str = "defect"):
+    """
+    Runs a rollout for 'num_steps' where:
+      - The target company (index 0) is forced to take the specified action
+        (either "defect" or "cooperate").
+      - Among the remaining companies (indices 1 to N–1), exactly 'num_other_cooperators'
+        are forced to cooperate (and the others are forced to defect).
+      - Investor agents use the learned policy.
+    
+    Parameters:
+      controller: The IPPOController instance.
+      runner_state: The current runner state.
+      num_steps: Number of simulation steps for the rollout.
+      num_other_cooperators: Number of companies (from companies 1 to N–1) forced to cooperate.
+      target_forced_action: "defect" or "cooperate" for the target company (index 0).
+    
+    Returns:
+      new_runner_state, final_company_capitals (shape [num_envs, num_companies]).
+    """
+    def forced_action(forced, target=False):
+        if target:
+            return always_defect_action() if target_forced_action.lower() == "defect" else always_cooperate_action()
+        else:
+            return always_cooperate_action() if forced else always_defect_action()
+    
+    env_const = controller.env_fn.get_default_const()
+    rng, train_state_lst, agent_state_lst, env_state, obs = runner_state
 
-    # Example dictionary mapping from “friendly” key => checkpoint folder name.
-    # You can rename these keys and values as you wish, so long as the folder names
-    # match the directories where your checkpoints are stored.
+    for t in range(num_steps):
+        all_actions = {}
+        # Loop over all agents.
+        for i, (agent_name, agent_fn, train_state, agent_state, agent_roles) in enumerate(
+            zip(controller.env_fn.agent_lst, controller.agent_fn_lst,
+                train_state_lst, agent_state_lst, controller.role_index_lst)
+        ):
+            # Non-company agents (e.g. investors) sample their actions normally.
+            # if not agent_name.startswith("company_"):
+            #     obs_i = select_env_agent(obs, agent_roles)
+            #     rng, rng_action = rng_batch_split(rng, len(agent_roles))
+            #     next_agent_state, action, log_p, val = jax.vmap(
+            #         agent_fn.rollout_step, in_axes=(0, None, 0, 0)
+            #     )(rng_action, train_state, agent_state, obs_i)
+            #     agent_state_lst[i] = next_agent_state
+            #     all_actions[agent_name] = action
+            #     continue
+            if not agent_name.startswith("company_"):
+                forced_investor_action = jnp.ones((controller.num_envs,5), dtype=jnp.int32)
+                all_actions[agent_name] = forced_investor_action
+                continue
+
+            company_idx = int(agent_name.split("_")[1])
+            if company_idx == 0:
+                act = forced_action(forced=True, target=True)
+                action_target = jnp.vstack([act for _ in range(controller.num_envs)])
+                all_actions[agent_name] = action_target
+            else:
+                forced_flag = (company_idx - 1) < num_other_cooperators
+                act = forced_action(forced=forced_flag, target=False)
+                action_other = jnp.vstack([act for _ in range(controller.num_envs)])
+                all_actions[agent_name] = action_other
+        
+        rng, rng_env_step = rng_batch_split(rng, controller.num_envs)
+        env_state, obs, rew, done, info = jax.vmap(
+            controller.env_fn.step, in_axes=(0, None, 0, 0)
+        )(rng_env_step, env_const, env_state, all_actions)
+    
+    final_company_capitals = extract_company_capitals_from_obs(obs, 5)
+    final_market_total_wealth = extract_market_total_wealth_from_obs(obs, 5, 3)
+    new_runner_state = (rng, train_state_lst, agent_state_lst, env_state, obs)
+    return new_runner_state, final_company_capitals, final_market_total_wealth
+
+#################################################
+# 7) Generate Schelling Diagrams for Equilibrium
+#################################################
+def generate_schelling_diagrams_equilibrium(parser, args):
+
     run_ids_dict = {
         "ppo_42_esg_score_0_obs_True": "ppo_42_esg_score_0_obs_True",
         "ppo_43_esg_score_0_obs_True": "ppo_43_esg_score_0_obs_True",
@@ -376,6 +466,160 @@ def main():
         "MTW: Mean ± 1 STD over multiple seeds",
         "evaluation_plot_mtw.png"
     )
+
+#################################################
+# 8) Generate Schelling Diagrams
+#################################################
+def generate_schelling_diagrams(parser, args):
+    """
+    Generates Schelling diagrams where the x-axis represents the number of cooperating companies 
+    (among the other four companies) in a population of 5 companies, with the target company (index 0)
+    forced to act either as a defector or as a cooperator. For each configuration the target company’s 
+    ending capital (payoff) and the market total wealth are measured.
+    
+    The function iterates over seeds (run_ids) and aggregates the results across seeds.
+    """
+    # Define the run_ids for this experiment (adjust as needed)
+    run_ids_dict = {
+        "ppo_43_esg_score_0_obs_True": "ppo_43_esg_score_0_obs_True",
+    }
+    
+    # Setup configuration: assume 5 companies.
+    config = generate_parameters(
+        domain=args.env_config_name,
+        debug=args.debug,
+        wandb_project="InvestESG",
+        config_from_arg=vars(args)
+    )
+    config.update({"num_companies": 5}, allow_val_change=True)
+    
+    # Lists for accumulating results across seeds.
+    target_payoffs_defect_all = []     # For target forced to defect.
+    target_payoffs_cooperate_all = []  # For target forced to cooperate.
+    market_wealth_defect_all = []       # Overall market total wealth (defect scenario).
+    market_wealth_cooperate_all = []    # Overall market total wealth (cooperate scenario).
+    
+    # x-axis: number of cooperating companies among the other 4 (can be 0, 1, 2, 3, or 4)
+    x_axis = list(range(0, 5))
+    num_steps = args.episode_length
+    
+    # Iterate over each seed/run
+    for friendly_name, checkpoint_folder in run_ids_dict.items():
+        print(f"\n--- Processing run_id: {checkpoint_folder} ({friendly_name}) ---")
+        env_fn = InvestESGEnv(config=config)
+        model_config = {'obs': MLPConfig(hidden_layers=2, hidden_size=256)}
+        controller = IPPOController([args], env_fn=env_fn, model_config_lst=[model_config])
+        
+        # Build role_index for each agent.
+        rng = jax.random.PRNGKey(config.seed)
+        agent_roles_lst = []
+        for ag_idx in range(env_fn.num_agents):
+            arr = [(env_idx, ag_idx) for env_idx in range(args.num_envs)]
+            agent_roles_lst.append(arr)
+        role_index_lst = [RoleIndex(jnp.array(r, dtype=int)[:, 0], jnp.array(r, dtype=int)[:, 1])
+                          for r in agent_roles_lst]
+        controller.role_index_lst = role_index_lst
+        
+        # Initialize runner state and load checkpoint if available.
+        init_runner_state = controller.init_runner_state(rng, env_fn.get_default_const(), role_index_lst)
+        save_dir = os.path.join(args.save_directory, checkpoint_folder)
+        ckpt_files = glob.glob(os.path.join(save_dir, "checkpoint_*"))
+        if ckpt_files:
+            init_runner_state = checkpoints.restore_checkpoint(ckpt_dir=save_dir, target=init_runner_state)
+            ckpt_dict = checkpoints.restore_checkpoint(ckpt_dir=save_dir, target=None)
+            init_runner_state = update_resume_runner_state_from_checkpoint(ckpt_dict, init_runner_state)
+            print(f"Loaded checkpoint for run_id={checkpoint_folder}")
+        else:
+            print(f"No checkpoint found for {checkpoint_folder}; using random init.")
+        
+        target_payoffs_defect = []    
+        target_payoffs_cooperate = [] 
+        market_wealth_defect = []     
+        market_wealth_cooperate = []   
+        
+        for num_other_cooperators in x_axis:
+            runner_state = init_runner_state
+            # Run scenario with target forced to defect.
+            runner_state_def, final_caps_def, mtw_def = run_scenario_schelling(
+                controller=controller,
+                runner_state=runner_state,
+                num_steps=num_steps,
+                num_other_cooperators=num_other_cooperators,
+                target_forced_action="defect"
+            )
+            payoff_def = float(final_caps_def[:, 0].mean())
+            target_payoffs_defect.append(payoff_def)
+            market_wealth_defect.append(mtw_def)
+            print(f"Run {checkpoint_folder} | {num_other_cooperators} cooperating others (target defect): payoff = {payoff_def:.3f}")
+            runner_state = init_runner_state
+            # Run scenario with target forced to cooperate.
+            runner_state_coop, final_caps_coop, mtw_coop = run_scenario_schelling(
+                controller=controller,
+                runner_state=runner_state,
+                num_steps=num_steps,
+                num_other_cooperators=num_other_cooperators,
+                target_forced_action="cooperate"
+            )
+            payoff_coop = float(final_caps_coop[:, 0].mean())
+            target_payoffs_cooperate.append(payoff_coop)
+            market_wealth_cooperate.append(mtw_coop)
+            print(f"Run {checkpoint_folder} | {num_other_cooperators} cooperating others (target cooperate): payoff = {payoff_coop:.3f}")
+        
+        target_payoffs_defect_all.append(target_payoffs_defect)
+        target_payoffs_cooperate_all.append(target_payoffs_cooperate)
+        market_wealth_defect_all.append(market_wealth_defect)
+        market_wealth_cooperate_all.append(market_wealth_cooperate)
+    
+    # Aggregate results over seeds.
+    payoff_defect_means = np.mean(target_payoffs_defect_all, axis=0)
+    payoff_defect_stds  = np.std(target_payoffs_defect_all, axis=0)
+    payoff_coop_means   = np.mean(target_payoffs_cooperate_all, axis=0)
+    payoff_coop_stds    = np.std(target_payoffs_cooperate_all, axis=0)
+    
+    mtw_defect_means = np.mean(market_wealth_defect_all, axis=0)
+    mtw_defect_stds  = np.std(market_wealth_defect_all, axis=0)
+    mtw_coop_means   = np.mean(market_wealth_cooperate_all, axis=0)
+    mtw_coop_stds    = np.std(market_wealth_cooperate_all, axis=0)
+    
+    # Print aggregated results.
+    for i, n in enumerate(x_axis):
+        print(f"[{n} cooperating others]: Forced defect mean payoff = {payoff_defect_means[i]:.3f}, "
+              f"Forced cooperate mean payoff = {payoff_coop_means[i]:.3f}")
+    
+    # Plot and save figures using distinct filenames.
+    plot_and_save(
+        x_axis,
+        payoff_defect_means,
+        payoff_defect_stds,
+        payoff_coop_means,
+        payoff_coop_stds,
+        "Number of Cooperating Other Companies",
+        "Target Company Ending Capital (avg)",
+        "Schelling Diagram (Payoff): Target vs. Others Composition",
+        "evaluation_plot_schelling_lambda_1_ac_1e-1.png"
+    )
+    
+    plot_and_save(
+        x_axis,
+        mtw_defect_means,
+        mtw_defect_stds,
+        mtw_coop_means,
+        mtw_coop_stds,
+        "Number of Cooperating Other Companies",
+        "Market Total Wealth (avg)",
+        "Schelling Diagram (MTW): Target vs. Others Composition",
+        "evaluation_plot_mtw_schelling_lambda_1_ac_1e-1.png"
+    )
+
+######################################
+# 9) Main
+######################################
+def main():
+    parser = get_base_parser()
+    args = parser.parse_args()
+
+    # generate_schelling_diagrams_equilibrium(parser, args)
+    generate_schelling_diagrams(parser, args)
 
 if __name__ == "__main__":
     main()
